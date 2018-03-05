@@ -9,7 +9,7 @@ class PowerSpectrum {
   PowerSpectrum(const char filename[]);
   ~PowerSpectrum();
   void load(const char filename[]);
-  double P(const double k);
+  double P(const double k) const;
   
   double *log_k, *log_P;
   double k_min, k_max;

@@ -1,4 +1,120 @@
+#include <iostream>
+#include <cstdio>
+#include <cmath>
+#include <cassert>
+#include <valarray>
 
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+
+#include "power_spectrum.h"
+#include "particle.h"
+#include "grid.h"
+#include "mock_lognormal.h"
+
+
+using namespace std;
+
+//
+// Step 1. Set power spectrum grid P(k)
+//
+void set_power_spectrum(PowerSpectrum const * const ps,
+			const double boxsize,
+			const double d,
+			const double b,
+			const double f,
+			Grid* const grid)
+{
+  // Input:
+  //     ps (PowerSpectrum): target P(k)
+  //                         i.e. the power spectrum of the resulting mock
+  //     boxsize (double):   size of the output mock on a side
+  //     d (double):         growth factor D
+  //     b (double):         bias
+  //     f (double):         growth rate f = dln D(a)/dln a
+  // Output:
+  //     grid (Grid):        grid of P(k_vector)
+  grid->clear();
+  grid->boxsize= boxsize;
+  const int nc= grid->nc;
+  const int nckz= nc/2 + 1;
+
+  fftw_complex* const pk= (fftw_complex*) grid->fx; 
+
+  const double fac= 2.0*M_PI/boxsize;
+  
+  for(int ix=0; ix<nc; ++ix) {
+   double kx= ix <= nc/2 ? fac*ix : fac*(ix - nc);
+   if(2*ix == nc) continue;
+   for(int iy=0; iy<nc; ++iy) {
+    double ky= iy <= nc/2 ? fac*iy : fac*(iy - nc);
+    if(2*iy == nc) continue;
+    
+    int iz0= (ix == 0 && iy == 0);
+
+    for(int iz=iz0; iz<nc/2; ++iz) {
+      double kz= fac*iz;
+      
+      double k= sqrt(kx*kx + ky*ky + kz*kz);
+      double mu= kz/k;
+      double fac= d*(b + f*mu*mu);
+      double fac2= fac*fac;
+      
+      size_t index= (ix*nc + iy)*nckz + iz;
+      pk[index][0]= fac2*ps->P(k);
+      pk[index][1]= 0.0;
+    }
+   }
+  }
+
+  pk[0][0]= pk[0][1]= 0.0;
+
+  grid->mode= fft_mode_k;
+}
+
+//
+// Step 2: compute gaussian P(k)
+//
+void compute_gaussian_power_spectrum(Grid* const grid)
+{
+  // Input:
+  //     grid (Grid): grid of lognormal P(k)
+  // Output:
+  //     grid (Grid): grid of Gaussian P_g(k)
+  
+  // Convert the P(k) grid to P_g(k) grid where P_g(k), 
+  // `Gaussian power spectrum`, is the power spectrum of delta_g such that
+  // the lognormal field have the expected P(k)
+  // 1 + delta(x) ~ exp(delta_g(x))
+  
+  // P(k) => xi(r)
+  grid->fft_inverse();
+
+  //
+  // Convert non-linear xi(r) to gaussian xi_g(r)
+  // xi(r) => xi_g(r) = log(1 + xi(r))
+  //
+  double* xi= grid->fx;
+  size_t nc= grid->nc;
+  size_t ncz= 2*(nc/2 + 1);
+  
+  for(size_t ix=0; ix<nc; ++ix) {
+    for(size_t iy=0; iy<nc; ++iy) {
+      for(size_t iz=0; iz<nc; ++iz) {
+	size_t index= (ix*nc + iy)*ncz + iz;
+	assert(1.0 + xi[index] > 0.0);
+	xi[index]= log(1.0 + xi[index]);
+      }
+    }
+  }
+
+  // xi_g(r) => P_g(r)
+  grid->fft_forward();
+}
+
+//
+// Step 3: generate random realisation of delta_g(k) based on P_g
+//
 void generate_delta_k(const unsigned long seed,
 		      const bool fix_amplitude,
 		      Grid* const grid) 
@@ -6,11 +122,9 @@ void generate_delta_k(const unsigned long seed,
   // Convert P(k) grid to random delta(k) grid such that
   // <|delta(k)|^2> = P(k)
   //
-  // input grid: P(k)
-  // output grid: delta_k(k)
+  // input:  grid as P(k)
+  // output: grid as delta(k)
 
-  assert(grid->mode == fft_mode_k);
-  
   const int nc= grid->nc;
   const size_t nckz= nc/2 + 1;
   const double boxsize= grid->boxsize;
@@ -29,16 +143,16 @@ void generate_delta_k(const unsigned long seed,
   
   for(int ix=0; ix<nc; ++ix) {
    if(2*ix == nc) continue;
-   double kx= ix <= nc/2 ? ix : ix - nc;
+   //double kx= ix <= nc/2 ? ix : ix - nc;
    
    for(int iy=0; iy<nc; ++iy) {
     if(2*iy == nc) continue;
-    double ky= iy <= nc/2 ? iy : iy - nc;
+    //double ky= iy <= nc/2 ? iy : iy - nc;
     
     int iz0= (ix == 0 && iy == 0);
     for(int iz=iz0; iz<nc/2; ++iz) {
-      double kz= iz;
-      double k= sqrt(kx*kx + ky*ky + kz*kz);
+      //double kz= iz;
+      //double k= sqrt(kx*kx + ky*ky + kz*kz);
 
       size_t index= (ix*nc + iy)*nckz + iz;
 
@@ -77,7 +191,7 @@ void generate_delta_k(const unsigned long seed,
   fprintf(stderr, "negative P(k): %zu\n", negative);
 
   //
-  // reality condition
+  // reality condition delta(-k) = delta(k)^*
   //
   for(int ix=0; ix<nc; ++ix) {
     if(2*ix == nc) continue;
@@ -87,11 +201,151 @@ void generate_delta_k(const unsigned long seed,
       if(2*iy == nc) continue;
       int iiy= iy == 0 ? 0 : nc - iy;
 
-      size_t index= (ix*nc + iy)*nckz;
-      size_t iindex= (iix*nc + iiy)*nckz;
+      size_t index= (ix*nc + iy)*nckz;    // index of k
+      size_t iindex= (iix*nc + iiy)*nckz; // index of -k
 
       fk[iindex][0]= fk[index][0];
       fk[iindex][1]= -fk[index][1];
     }
   }
+}
+
+//
+// Convert delta_g(k) to delta(k)
+//
+void compute_lognormal_density(Grid* const grid)
+{
+  // input: delta_g(k)
+  // output: 1 + delta_target \prop exp(delta_g(x))
+
+  assert(grid->mode == fft_mode_k);
+  grid->fft_inverse();
+  
+  assert(grid->mode == fft_mode_x);
+  size_t nc= grid->nc;
+  size_t ncz= 2*(nc/2 + 1);
+  double* const delta= grid->fx;
+  long double nsum= 0.0;
+  long double n2sum= 0.0;
+  double nmax= 0.0;
+  double dmax= 0.0;
+  long double d2sum= 0.0;
+  
+  for(size_t ix=0; ix<nc; ++ix) {
+   for(size_t iy=0; iy<nc; ++iy) {
+    for(size_t iz=0; iz<nc; ++iz) {
+      size_t index= (ix*nc + iy)*ncz + iz;
+	  
+      double d= delta[index];
+      double n= exp(d); // lognormal density
+      delta[index] = n;
+      if(d > dmax) dmax= d;
+      d2sum += d*d;
+      
+      // lognormal density (unnormalised)
+      nsum += n;
+      n2sum += n*n;
+      if(n > nmax) nmax= n;
+    }
+   }
+  }
+  
+  cerr << "dmax= " << dmax << endl;
+  cerr << "d rms= " << sqrt(d2sum/(nc*nc*nc)) << endl;
+  // normalization
+  const double nbar= nsum/(nc*nc*nc);
+  cerr << "nbar= " << nbar << endl;
+  cerr << "n2sum= " << n2sum << endl;
+
+  // Normalise density to n(x)/nbar = 1 + delta(x)
+  for(size_t ix=0; ix<nc; ++ix) {
+    for(size_t iy=0; iy<nc; ++iy) {
+      for(size_t iz=0; iz<nc; ++iz) {
+	size_t index= (ix*nc + iy)*ncz + iz;
+
+	delta[index] /= nbar;
+      }
+    }
+  }
+
+  cerr << "Lognormal rms: " << sqrt(n2sum/(nbar*nbar*nc*nc*nc) - 1.0) << endl;
+  //cerr << "nmax " << nmax/nbar << endl;
+  //return nmax/nbar; // max(1 + delta)
+}
+
+//
+// step 4: generate particles
+//
+void generate_particles(Grid const * const grid,
+			const unsigned long seed, const size_t np,
+			vector<Particle>* const v)
+{
+  // Samples random number of particles from each grid (Poisson sampling)
+  //
+  // Input:
+  //     seed (unsigned long): random seed of poisson sampling
+  //     
+  //     grid of 1 + delta(x)
+  // Output:
+  //     v (vector<Particle>): mock particles are added to this vector
+  assert(grid->mode == fft_mode_x);
+
+  cerr << "start printing mock\n";
+  
+  gsl_rng* rng= gsl_rng_alloc(gsl_rng_ranlxd1);
+  gsl_rng_set(rng, seed);
+
+  const size_t nc= grid->nc;
+  const size_t ncz= 2*(nc/2 + 1);
+
+  // mean number density over all box
+  // number of particles per cell
+  const double num_bar= static_cast<double>(np)/(nc*nc*nc);
+  const double dx= grid->boxsize/nc;
+
+  double const * const n= grid->fx;
+
+  // Allocate memory for output particles
+  size_t n_alloc= static_cast<size_t>(np + 10.0*sqrt(static_cast<double>(np)));
+  v->reserve(v->size() + n_alloc);
+
+  Particle p;
+  //int ix[3];
+
+  size_t count= 0;
+  size_t count_negative= 0;
+  long double num_total_mean= 0;
+
+  for(size_t ix=0; ix<nc; ++ix) {
+    for(size_t iy=0; iy<nc; ++iy) {
+      for(size_t iz=0; iz<nc; ++iz) {
+	size_t index= (ix*nc + iy)*ncz + iz;
+
+	// mean number of particles in the cell
+	double num_grid= n[index]*num_bar;
+	num_total_mean += num_grid;
+
+	// random realisation of number of particles in cell
+	int num= gsl_ran_poisson(rng, num_grid);
+
+	if(n[index] < 0.0)
+	  count_negative += num;
+	
+	for(int i=0; i<num; ++i) {
+	  p.x[0]= (ix + gsl_rng_uniform(rng))*dx;
+	  p.x[1]= (iy + gsl_rng_uniform(rng))*dx;
+	  p.x[2]= (iz + gsl_rng_uniform(rng))*dx;
+	  v->push_back(p);
+	}
+	count += num;
+      }
+    }
+  }
+    
+  gsl_rng_free(rng);
+
+  fprintf(stderr, "np= %zu, count= %zu\n", np, count);
+  fprintf(stderr, "num_total_mean= %Lf\n", num_total_mean);
+  if(count_negative > 0)
+    fprintf(stderr, "negative density= %zu / %zu\n", count_negative, count);
 }

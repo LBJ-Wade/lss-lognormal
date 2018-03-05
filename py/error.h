@@ -7,4 +7,7 @@ class ErrorFileNotFound{};
 
 class RuntimeError{};
 
+class AssertionError: RuntimeError{};
+class MemoryError: RuntimeError {};
+
 #endif

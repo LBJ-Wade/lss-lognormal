@@ -81,7 +81,7 @@ void PowerSpectrum::load(const char filename[])
   k_max= exp(log_k[nlines-1]);
 }
 
-double PowerSpectrum::P(const double k)
+double PowerSpectrum::P(const double k) const
 {
   if(k <= k_min || k > k_max)
     return 0.0;

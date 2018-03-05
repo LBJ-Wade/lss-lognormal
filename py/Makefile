@@ -1,7 +1,7 @@
 
 all: install
 
-SRC := taruya.cpp growth.cpp power.cpp
+SRC := growth.cpp power.cpp
 
 build: setup.py $(SRC)
 	python3 setup.py build_ext --inplace

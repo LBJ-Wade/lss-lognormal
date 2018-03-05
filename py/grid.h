@@ -7,7 +7,7 @@ enum FFTMode {fft_mode_unknown, fft_mode_x, fft_mode_k};
 
 class Grid {
  public:
-  Grid(const int nc_, const double boxsize_);
+  Grid(const int nc_);
   ~Grid();
 
   void fft_forward();
@@ -17,8 +17,9 @@ class Grid {
   double* fx;
   fftw_complex* fk;
   const int nc;
-  const double boxsize;
+  double boxsize;
   FFTMode mode;
+  double x0_box[3];
 
 
  private:
