@@ -10,7 +10,7 @@ setup(name='lsslognormal',
       ext_modules=[
           Extension('lsslognormal._lsslognormal',
                     ['py_package.cpp',
-                     'py_growth.cpp',
+                     'py_growth.cpp', 'py_power_spectrum.cpp',
                      'py_particles.cpp', 'py_grid.cpp',
                      'py_mock_lognormal.cpp', 
                      'power_spectrum.cpp', 'growth.cpp',

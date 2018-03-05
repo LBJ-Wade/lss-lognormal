@@ -1,4 +1,4 @@
-import lsspert._lsspert as c
+import lsslognormal._lsslognormal as c
 
 def D(omega_m, *, a=None, z=None):
     """
