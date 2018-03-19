@@ -27,6 +27,10 @@ static PyMethodDef methods[] = {
 
   {"_mock_lognormal_generate", py_mock_lognormal_generate, METH_VARARGS,
    "_mock_lognormal_generate(_ps, nc, boxsize, np, seed, growth, bias, f, fix_amplitude, v"},
+  {"_mock_lognormal_generate_octant", py_mock_lognormal_generate_octant, METH_VARARGS,
+   "_mock_lognormal_generate_octant(_ps, nc, boxsize, nbar, r_min, r_max, seed, growth, bias, f, fix_amplitude, v"},
+  {"_random_generate_octant", py_random_generate_octant, METH_VARARGS,
+   "_random_generate_octant(nc, boxsize, nbar, r_min, r_max, seed, v)"},
    
   {NULL, NULL, 0, NULL}
 };

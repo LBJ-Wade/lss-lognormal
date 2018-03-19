@@ -349,3 +349,168 @@ void generate_particles(Grid const * const grid,
   if(count_negative > 0)
     fprintf(stderr, "negative density= %zu / %zu\n", count_negative, count);
 }
+
+//
+// step 4a: generate particles in a octant shell
+//
+void generate_particles_octant(Grid const * const grid,
+			       const unsigned long seed,
+			       const double nbar,
+			       const double r_min, const double r_max,
+			       vector<Particle>* const v)
+{
+  // Samples random number of particles from each grid (Poisson sampling)
+  //
+  // Input:
+  //     seed (unsigned long): random seed of poisson sampling
+  //     
+  //     grid of 1 + delta(x)
+  // Output:
+  //     v (vector<Particle>): mock particles are added to this vector
+  assert(grid->mode == fft_mode_x);
+
+  cerr << "start printing mock in an octant shell\n";
+  
+  gsl_rng* rng= gsl_rng_alloc(gsl_rng_ranlxd1);
+  gsl_rng_set(rng, seed);
+
+  const size_t nc= grid->nc;
+  const size_t ncz= 2*(nc/2 + 1);
+
+  // mean number density over all box
+  // number of particles per cell
+  const double dx= grid->boxsize/nc;
+  const double num_bar= nbar*dx*dx*dx; //static_cast<double>(np)/(nc*nc*nc);
+  
+  double const * const n= grid->fx;
+
+
+  Particle p;
+
+  size_t count= 0;
+  size_t count_negative= 0;
+
+  const double ir_max = r_max/dx;
+  const double ir2_max = (r_max/dx)*(r_max/dx);
+  const double r2_min = r_min*r_min;
+  const double r2_max = r_max*r_max;
+
+  const double vol = 0.5*M_PI/3.0*(r_max*r_max*r_max - r_min*r_min*r_min);
+  const double np= nbar*vol;
+  
+  // Allocate memory for output particles
+  size_t n_alloc= static_cast<size_t>(np + 10.0*sqrt(np));
+  v->reserve(v->size() + n_alloc);
+
+
+  // Loop over all grids
+  for(size_t ix=0; ix<nc; ++ix) {
+    if(ix + 1 > ir_max) break; // All the following grids are beyond r_max
+    for(size_t iy=0; iy<nc; ++iy) {
+      if((ix + 1)*(ix + 1) + (iy + 1)*(iy + 1) > ir2_max) break;
+      for(size_t iz=0; iz<nc; ++iz) {
+	if((ix + 1)*(ix + 1) + (iy + 1)*(iy + 1) + (iz + 1)*(iz + 1) > ir2_max) break;
+	
+	size_t index= (ix*nc + iy)*ncz + iz;
+
+	// mean number of particles in the cell
+	double num_grid= n[index]*num_bar;
+
+	// random realisation of number of particles in cell
+	int num= gsl_ran_poisson(rng, num_grid);
+
+	if(n[index] < 0.0)
+	  count_negative += num;
+	
+	for(int i=0; i<num; ++i) {
+	  p.x[0]= (ix + gsl_rng_uniform(rng))*dx;
+	  p.x[1]= (iy + gsl_rng_uniform(rng))*dx;
+	  p.x[2]= (iz + gsl_rng_uniform(rng))*dx;
+	  double r2=  p.x[0]*p.x[0] + p.x[1]* p.x[1] + p.x[2]* p.x[2];
+	  if(r2_min <= r2 && r2 < r2_max)
+	    v->push_back(p);
+	}
+	count += num;
+      }
+    }
+  }
+    
+  gsl_rng_free(rng);
+
+  fprintf(stderr, "np= %.1lf, count= %zu\n", np, count);
+  // this 'count' is before r2_min <= r2 < r2_max cut
+  if(count_negative > 0)
+    fprintf(stderr, "negative density= %zu / %zu\n", count_negative, count);
+}
+
+void generate_randoms_octant(const int nc, const double boxsize,
+			     const unsigned long seed,
+			     const double nbar,
+			     const double r_min, const double r_max,
+			     vector<Particle>* const v)
+{
+  // Samples random number of particles from each grid (Poisson sampling)
+  //
+  // Args:
+  //     seed (unsigned long): random seed of poisson sampling
+  //     
+  //     grid of 1 + delta(x)
+  // Output:
+  //     v (vector<Particle>): random particles are added to this vector
+
+  cerr << "start printing mock in an octant shell\n";
+  
+  gsl_rng* rng= gsl_rng_alloc(gsl_rng_ranlxd1);
+  gsl_rng_set(rng, seed);
+
+  // mean number density over all box
+  // number of particles per cell
+  const double dx= boxsize/nc;
+  const double num_bar= nbar*dx*dx*dx;
+  
+  Particle p;
+
+  size_t count= 0;
+
+  const double ir_max = r_max/dx;
+  const double ir2_max = (r_max/dx)*(r_max/dx);
+  const double r2_min = r_min*r_min;
+  const double r2_max = r_max*r_max;
+
+  const double vol = 0.5*M_PI/3.0*(r_max*r_max*r_max - r_min*r_min*r_min);
+  const double np= nbar*vol;
+  
+  // Allocate memory for output particles
+  size_t n_alloc= static_cast<size_t>(np + 10.0*sqrt(np));
+  v->reserve(v->size() + n_alloc);
+
+
+  // Loop over all grids
+  for(size_t ix=0; ix<nc; ++ix) {
+    if(ix + 1 > ir_max) break; // All the following grids are beyond r_max
+    for(size_t iy=0; iy<nc; ++iy) {
+      if((ix + 1)*(ix + 1) + (iy + 1)*(iy + 1) > ir2_max) break;
+      for(size_t iz=0; iz<nc; ++iz) {
+	if((ix + 1)*(ix + 1) + (iy + 1)*(iy + 1) + (iz + 1)*(iz + 1) > ir2_max) break;
+	
+	// random realisation of number of particles in cell
+	int num= gsl_ran_poisson(rng, num_bar);
+
+	for(int i=0; i<num; ++i) {
+	  p.x[0]= (ix + gsl_rng_uniform(rng))*dx;
+	  p.x[1]= (iy + gsl_rng_uniform(rng))*dx;
+	  p.x[2]= (iz + gsl_rng_uniform(rng))*dx;
+	  double r2=  p.x[0]*p.x[0] + p.x[1]* p.x[1] + p.x[2]* p.x[2];
+	  if(r2_min <= r2 && r2 < r2_max)
+	    v->push_back(p);
+	}
+	count += num;
+      }
+    }
+  }
+    
+  gsl_rng_free(rng);
+
+  fprintf(stderr, "np= %.1lf, count= %zu\n", np, count);
+  // this 'count' is before r2_min <= r2 < r2_max cut
+}
