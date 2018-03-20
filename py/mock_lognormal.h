@@ -30,9 +30,17 @@ void generate_particles_octant(Grid const * const grid,
 			       const double r_min, const double r_max,
 			       std::vector<Particle>* const v);
 
+/*
 void generate_randoms_octant(const int nc, const double boxsize,
 			     const unsigned long seed,
 			     const double nbar,
+			     const double r_min, const double r_max,
+			     std::vector<Particle>* const v);
+*/
+
+void generate_randoms_octant(const size_t nc, const double boxsize,
+			     const unsigned long seed,
+			     const double rand_ratio,
 			     const double r_min, const double r_max,
 			     std::vector<Particle>* const v);
 
