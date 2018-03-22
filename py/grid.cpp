@@ -4,7 +4,14 @@
 #include <cmath>
 #include "grid.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+static bool init_fftw= false;
+#endif
+
 using namespace std;
+
+
 
 Grid::Grid(const int nc_) :
   nc(nc_), boxsize(0.0), ncz(2*(nc_/2+1))
@@ -19,6 +26,14 @@ Grid::Grid(const int nc_) :
 
   plan_inverse= fftw_plan_dft_c2r_3d(nc, nc, nc, fk, fx,
 				     FFTW_ESTIMATE);
+
+#ifdef _OPENMP
+  if(init_fftw == false) {
+    fftw_init_threads();
+    fftw_plan_with_nthreads(omp_get_max_threads());
+    init_fftw= true;
+  }
+#endif
 
   cerr << "allocated " << ngrid << " grids\n";
 }
