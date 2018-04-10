@@ -1,9 +1,10 @@
 all: install
 
 # compiler
-OPENMP  := -fopenmp
-CXX     := g++ $(OPENMP)
-CC      := $(CXX)
+OPENMP    := -fopenmp
+CXXOPENMP ?= g++
+CXX       ?= $(CXXOPENMP) $(OPENMP)
+CC        := $(CXX)
 
 # library paths
 FFTW3_DIR ?= #e.g. /Users/jkoda/Research/opt/gcc/fftw3

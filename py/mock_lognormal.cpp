@@ -45,6 +45,9 @@ void set_power_spectrum(PowerSpectrum const * const ps,
   const int nc= grid->nc;
   const int nckz= nc/2 + 1;
 
+  fprintf(stderr, "D= %.4f, b=%.2f, f=%15e, (D*b)^2= %.15e\n",
+	  d, b, f, d*d*b*b);
+
   fftw_complex* const pk= (fftw_complex*) grid->fx; 
 
   const double fac= 2.0*M_PI/boxsize;
